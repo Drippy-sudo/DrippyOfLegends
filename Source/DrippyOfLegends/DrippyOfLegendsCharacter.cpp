@@ -4,6 +4,7 @@
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SphereComponent.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
@@ -11,6 +12,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "AIController.h"
+#include "BasicHitbox.h"
+#include "EnemyBasic.h"
 
 //////////////////////////////////////////////////////////////////////////
 // ADrippyOfLegendsCharacter
@@ -45,6 +48,10 @@ ADrippyOfLegendsCharacter::ADrippyOfLegendsCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
+	BasicAttackRangeComp = CreateDefaultSubobject<USphereComponent>(TEXT("BasicHitRangeComp"));
+	BasicAttackRangeComp->SetupAttachment(RootComponent);
+	BasicAttackRangeComp->InitSphereRadius(120.0f);
+
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
 	bIsLocked = true;
@@ -57,6 +64,7 @@ ADrippyOfLegendsCharacter::ADrippyOfLegendsCharacter()
 	MinScrollZoom = 400.0f;
 	MaxScrollZoom = 1000.0f;	
 	CameraSpeed = 500.0f;
+	Range = 200.0f;
 }
 
 void ADrippyOfLegendsCharacter::BeginPlay()
@@ -79,6 +87,8 @@ void ADrippyOfLegendsCharacter::BeginPlay()
 
 	CameraBoomRelative = CameraBoom->GetRelativeTransform();
 	CameraZOffset = CameraBoom->GetComponentLocation().Z;
+
+	BasicAttackRangeComp->OnComponentBeginOverlap.AddDynamic(this, &ADrippyOfLegendsCharacter::OnOverlapBegin);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -127,30 +137,63 @@ void ADrippyOfLegendsCharacter::Tick(float DeltaTime)
 	}
 }
 
+void ADrippyOfLegendsCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, 
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	if (OtherActor && (OtherActor != this) && OtherComp)
+	{
+		if (Target)
+		{
+			GetCharacterMovement()->StopMovementImmediately();
+			PlayBasicAttack();
+			UE_LOG(LogTemp, Warning, TEXT("Collided with target!"));
+		}
+	}
+}
+
 void ADrippyOfLegendsCharacter::MouseRight()
 {
+	FHitResult HitResult = MoveToPoint();
+
+	// Reset target
+	Target = nullptr;
+
+	// If Hit Targetable Object
+	AEnemyBasic* Enemy = Cast<AEnemyBasic>(HitResult.GetActor());
+	if (Enemy)
+	{
+		// Make target
+		Target = Enemy;
+	}
 }
 
 void ADrippyOfLegendsCharacter::MouseLeft()
 {
+
+}
+
+FHitResult ADrippyOfLegendsCharacter::MoveToPoint()
+{
+	FHitResult HitResult;
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Failed to find world in Mouse Left."));
-		return;
+		return HitResult;
 	}
 
 	if (!PlayerController)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Failed to find player controller in Mouse Left."));
-		return;
+		return HitResult;
 	}
 
 	float X, Y;
 	if (PlayerController->GetMousePosition(X, Y))
 	{
 		FVector MouseWorldLocation, MouseWorldDirection;
-		
+
 		if (PlayerController->DeprojectMousePositionToWorld(MouseWorldLocation, MouseWorldDirection))
 		{
 			const float Distance = 99999999.0f;
@@ -163,30 +206,29 @@ void ADrippyOfLegendsCharacter::MouseLeft()
 			// Collision Params
 			FCollisionQueryParams CollisionParams;
 			CollisionParams.AddIgnoredActor(this);
-			FHitResult OutHit;
 
 			// Line Trace
 			World->LineTraceSingleByChannel(
-				OutHit,
+				HitResult,
 				Start,
 				End,
 				ECollisionChannel::ECC_Visibility,
 				CollisionParams);
-			
+
 			// Draw Line
 			if (bDebugMode)
-				DrawDebugLine(World, Start, End, FColor::Blue, true);
+				DrawDebugLine(World, Start, End, FColor::Blue, true, 5);
 
 			// Test Actor
-			if (OutHit.Actor.IsValid())
+			if (HitResult.Actor.IsValid())
 			{
 				if (bDebugMode)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Actor hit : %s"), *OutHit.Actor.Get()->GetName());
-					UE_LOG(LogTemp, Warning, TEXT("Location : %s"), *OutHit.Location.ToString());
+					UE_LOG(LogTemp, Warning, TEXT("Actor hit : %s"), *HitResult.Actor.Get()->GetName());
+					UE_LOG(LogTemp, Warning, TEXT("Location : %s"), *HitResult.Location.ToString());
 				}
 
-				FVector TargetLocation = OutHit.Location;
+				FVector TargetLocation = HitResult.Location;
 
 				CancelAttack();
 
@@ -195,6 +237,8 @@ void ADrippyOfLegendsCharacter::MouseLeft()
 			}
 		}
 	}
+
+	return HitResult;
 }
 
 void ADrippyOfLegendsCharacter::MouseScrollUp()

@@ -17,11 +17,19 @@ class ADrippyOfLegendsCharacter : public ACharacter
 
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
-		class UCameraComponent* FollowCamera;
+	class UCameraComponent* FollowCamera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "", meta = (AllowPrivateAccess = "true"))
+	class USphereComponent* BasicAttackRangeComp;
+
 public:
 	ADrippyOfLegendsCharacter();
 
 	virtual void BeginPlay() override;
+
+	UFUNCTION()
+	void OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, 
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 protected:
 	virtual void Tick(float DeltaTime) override;
@@ -36,6 +44,8 @@ protected:
 
 	void ToggleCameraLock();
 
+	FHitResult MoveToPoint();
+
 	UFUNCTION(BlueprintCallable)
 	void MoveForward(float Value);
 
@@ -43,36 +53,45 @@ protected:
 	void MoveRight(float Value);
 
 	UFUNCTION(BlueprintImplementableEvent)
-		void MoveToLocation(FVector Location);
+	void MoveToLocation(FVector Location);
 
 	UFUNCTION(BlueprintImplementableEvent)
-		void CancelAttack();
+	void CancelAttack();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void PlayBasicAttack();
 
 	UPROPERTY(EditAnywhere, Category = "Debug")
-		bool bDebugMode;
+	bool bDebugMode;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
-		float ZoomSpeed;
+	float ZoomSpeed;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
-		float MinScrollZoom;
+	float MinScrollZoom;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
-		float MaxScrollZoom;
+	float MaxScrollZoom;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
-		float CameraSpeed;
-
-	UPROPERTY(EditAnywhere, Category = "Combat")
-		AActor* Target;
+	float CameraSpeed;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-		bool bIsAttacking;
+	bool bIsAttacking;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Combat")
+	AActor* Target;
 
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	// End of APawn interface
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Box")
+	TSubclassOf<class ABasicHitbox> BasicHitBox;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Box")
+	float Range;
 
 public:
 	/** Returns CameraBoom subobject **/
